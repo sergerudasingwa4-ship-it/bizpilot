@@ -1,0 +1,330 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// UTILISATEURS & ENTREPRISES
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  fullName      String
+  phone         String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  memberships   CompanyMember[]
+  createdAlerts Alert[]         @relation("alertCreator")
+  resolvedAlerts Alert[]        @relation("alertResolver")
+
+  @@map("users")
+}
+
+model Company {
+  id          String    @id @default(cuid())
+  name        String
+  currency    String    @default("RWF")
+  timezone    String    @default("Africa/Kigali")
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  members     CompanyMember[]
+  products    Product[]
+  sales       Sale[]
+  expenses    Expense[]
+  cashMovements CashMovement[]
+  stockMovements StockMovement[]
+  dailyReports DailyReport[]
+  attachments Attachment[]
+  auditLogs   AuditLog[]
+  alerts      Alert[]
+
+  @@map("companies")
+}
+
+model CompanyMember {
+  id          String    @id @default(cuid())
+  userId      String
+  companyId   String
+  role        Role      @default(MANAGER)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+  @@map("company_members")
+}
+
+enum Role {
+  OWNER
+  MANAGER
+  VIEWER
+}
+
+// ============================================
+// PRODUITS & STOCK
+// ============================================
+
+model Product {
+  id            String    @id @default(cuid())
+  companyId     String
+  name          String
+  sku           String?
+  unitPrice     Decimal   @db.Decimal(12, 2)
+  costPrice     Decimal?  @db.Decimal(12, 2)
+  currentStock  Int       @default(0)
+  lowStockThreshold Int   @default(5)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  saleItems     SaleItem[]
+  stockMovements StockMovement[]
+
+  @@map("products")
+}
+
+// ============================================
+// VENTES
+// ============================================
+
+model Sale {
+  id            String    @id @default(cuid())
+  companyId     String
+  saleNumber    String    @unique
+  totalAmount   Decimal   @db.Decimal(12, 2)
+  paymentMethod String    @default("cash")
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  items         SaleItem[]
+  cashMovement  CashMovement?
+
+  @@map("sales")
+}
+
+model SaleItem {
+  id            String    @id @default(cuid())
+  saleId        String
+  productId     String
+  quantity      Int
+  unitPrice     Decimal   @db.Decimal(12, 2)
+  subtotal      Decimal   @db.Decimal(12, 2)
+  createdAt     DateTime  @default(now())
+
+  sale          Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@map("sale_items")
+}
+
+// ============================================
+// DÉPENSES
+// ============================================
+
+model Expense {
+  id            String    @id @default(cuid())
+  companyId     String
+  category      String
+  amount        Decimal   @db.Decimal(12, 2)
+  description   String?
+  occurredAt    DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  cashMovement  CashMovement?
+
+  @@map("expenses")
+}
+
+// ============================================
+// CAISSE
+// ============================================
+
+model CashMovement {
+  id            String    @id @default(cuid())
+  companyId     String
+  type          CashMovementType
+  amount        Decimal   @db.Decimal(12, 2)
+  description   String?
+  saleId        String?   @unique
+  expenseId     String?   @unique
+  createdAt     DateTime  @default(now())
+
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sale          Sale?     @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  expense       Expense?  @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+
+  @@map("cash_movements")
+}
+
+enum CashMovementType {
+  IN
+  OUT
+}
+
+// ============================================
+// MOUVEMENTS DE STOCK
+// ============================================
+
+model StockMovement {
+  id            String    @id @default(cuid())
+  companyId     String
+  productId     String
+  type          StockMovementType
+  quantity      Int
+  reason        String?
+  createdAt     DateTime  @default(now())
+
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@map("stock_movements")
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+}
+
+// ============================================
+// RAPPORT QUOTIDIEN & CLÔTURE
+// ============================================
+
+model DailyReport {
+  id              String    @id @default(cuid())
+  companyId       String
+  reportDate      DateTime  @db.Date
+  totalSales      Decimal   @db.Decimal(12, 2) @default(0)
+  totalExpenses   Decimal   @db.Decimal(12, 2) @default(0)
+  expectedCash    Decimal   @db.Decimal(12, 2) @default(0)
+  actualCash      Decimal?  @db.Decimal(12, 2)
+  cashDifference  Decimal?  @db.Decimal(12, 2)
+  status          ReportStatus @default(DRAFT)
+  closedAt        DateTime?
+  closedByUserId  String?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, reportDate])
+  @@map("daily_reports")
+}
+
+enum ReportStatus {
+  DRAFT
+  SUBMITTED
+  VERIFIED
+  REJECTED
+}
+
+// ============================================
+// PIÈCES JOINTES (JUSTIFICATIFS)
+// ============================================
+
+model Attachment {
+  id            String    @id @default(cuid())
+  companyId     String
+  entityType    String
+  entityId      String
+  fileName      String
+  filePath      String
+  mimeType      String
+  fileSize      Int
+  uploadedAt    DateTime  @default(now())
+
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("attachments")
+}
+
+// ============================================
+// JOURNAL D'AUDIT
+// ============================================
+
+model AuditLog {
+  id            String    @id @default(cuid())
+  companyId     String
+  action        String
+  entityType    String
+  entityId      String?
+  oldValue      Json?
+  newValue      Json?
+  performedBy   String?
+  ipAddress     String?
+  createdAt     DateTime  @default(now())
+
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("audit_logs")
+}
+
+// ============================================
+// ALERTES & SIGNAUX D'ANOMALIE
+// ============================================
+
+model Alert {
+  id            String    @id @default(cuid())
+  companyId     String
+  type          AlertType
+  severity      AlertSeverity @default(MEDIUM)
+  title         String
+  description   String?
+  entityType    String?
+  entityId      String?
+  status        AlertStatus @default(NEW)
+  createdById   String?
+  resolvedById  String?
+  resolvedAt    DateTime?
+  resolutionNote String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy     User?     @relation("alertCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  resolvedBy    User?     @relation("alertResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@map("alerts")
+}
+
+enum AlertType {
+  CASH_MISMATCH
+  LOW_STOCK
+  UNUSUAL_EXPENSE
+  MISSING_REPORT
+  STOCK_ADJUSTMENT
+  MANUAL_OVERRIDE
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertStatus {
+  NEW
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}

@@ -7,6 +7,7 @@ import productRoutes from "./modules/products/product.routes";
 import saleRoutes from "./modules/sales/sale.routes"; 
 import expenseRoutes from "./modules/expenses/expense.routes"; 
 import cashRoutes from "./modules/cash/cash.routes"; 
+import dashboardRoutes from "./modules/dashboard/dashboard.routes";
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ app.use("/products", productRoutes);
 app.use("/sales", saleRoutes); 
 app.use("/expenses", expenseRoutes);
 app.use("/cash", cashRoutes);
+app.use("/dashboard", dashboardRoutes);
 
 app.listen(PORT, () => {
   console.log(`🚀 BizPilot API running on http://localhost:${PORT}`);

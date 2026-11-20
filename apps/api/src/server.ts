@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import authRoutes from "./modules/auth/auth.routes";
 import companyRoutes from "./modules/companies/company.routes";
 import productRoutes from "./modules/products/product.routes";
+import saleRoutes from "./modules/sales/sale.routes"; // <-- AJOUTÉ
 
 dotenv.config();
 
@@ -20,6 +21,7 @@ app.get("/health", (req, res) => {
 app.use("/auth", authRoutes);
 app.use("/companies", companyRoutes);
 app.use("/products", productRoutes);
+app.use("/sales", saleRoutes); // <-- AJOUTÉ
 
 app.listen(PORT, () => {
   console.log(`🚀 BizPilot API running on http://localhost:${PORT}`);
